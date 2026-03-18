@@ -4,5 +4,5 @@
 - alt + ins 快速生成代码
 - psvm main方法
 - 快捷键修改 设置 -> Keymap
-- Ctrl + Shift + Z‌：重做（Redo）
-- Ctrl + Y‌：删除行
+- Ctrl + Y：重做（已改）
+- Shift + Alt + ↑：整体上移

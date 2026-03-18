@@ -1,3 +1,5 @@
+package polymorphism;
+
 public class SuperMember extends Member {
     @Override
     public void buyBook() {

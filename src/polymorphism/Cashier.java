@@ -1,3 +1,5 @@
+package polymorphism;
+
 public class Cashier {
     private Member member;
     

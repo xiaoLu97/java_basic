@@ -1,3 +1,5 @@
+package polymorphism;
+
 public class OrdinaryMember extends Member {
     @Override
     public void buyBook() {
