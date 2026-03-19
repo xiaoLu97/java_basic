@@ -11,6 +11,10 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class Main {
     public static void main(String[] args) {
+        // 背景：ArrayList是线程不安全的，多线程并发 add 会导致数据不一致和状态异常。
+        // ArrayList 底层是数组，扩容时需要先检查容量、再赋值。
+        // 新数组的元素默认是 null。如果线程在扩容过程中读取数组，就会读到未被赋值的 null 元素。
+
         // 1 CyclicBarrier 加法计数器，满足就会执行后面的回调。执行后清0，可重复
 //        countDownSample(); // 2 减法计数器
 //        semaphoreSample(); // 3 计数信号量，用于限流操作。限制访问某些资源的线程数量。
