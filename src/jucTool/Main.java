@@ -2,16 +2,13 @@ package jucTool;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class Main {
     public static void main(String[] args) {
-        // 背景：ArrayList是线程不安全的，多线程并发 add 会导致数据不一致和状态异常。
+        // 场景：ArrayList是线程不安全的，多线程并发 add 会导致数据不一致和状态异常。
         // ArrayList 底层是数组，扩容时需要先检查容量、再赋值。
         // 新数组的元素默认是 null。如果线程在扩容过程中读取数组，就会读到未被赋值的 null 元素。
 
@@ -20,6 +17,7 @@ public class Main {
 //        semaphoreSample(); // 3 计数信号量，用于限流操作。限制访问某些资源的线程数量。
         // 4 CopyOnWriteArrayList 写操作时，先复制一份，避免读写同时进行报异常
 //        readWriteLockSample(); // 5 读写锁 可多线程读，但只有一个线程写
+        computeBigSum(); // 6 ForkJoin框架
     }
 
     public static void countDownSample() {
@@ -75,6 +73,31 @@ public class Main {
             }).start();
         }
     }
+
+    public static void computeBigSum() {
+        Long startTime = System.currentTimeMillis();
+/*
+        Long sum = 0L;
+        for (Long i = 0L; i < 20_0000_0000L; i++) {
+            sum += i;
+        }
+        Long endTime = System.currentTimeMillis(); // 9秒
+*/
+        // 质上是对线程池的一种补充，它的核心思想是将一个大型任务拆分成多个小任务，分别执行，最终将小任务的结果进行汇总，形成最终的结果。
+        // ForkJoinTask 表示任务
+        // ForkJoinPool 表示线程（线程池的一种扩展）
+        ForkJoinPool forkJoinPool = new ForkJoinPool();
+        ForkJoinTask<Long> task = new ForkJoinDemo(0L, 20_0000_0000L);
+        forkJoinPool.execute(task);
+        Long sum = null;
+        try {
+            sum = task.get();
+        } catch (InterruptedException | ExecutionException e) {
+            e.printStackTrace();
+        }
+        Long endTime = System.currentTimeMillis(); // 5秒
+        System.out.println(sum + ", 耗时" + (endTime - startTime) / 1000 + "秒");
+    }
 }
 
 class Cache {
@@ -105,5 +128,33 @@ class Cache {
 //        System.out.println(key + "读取完毕");
         lock.readLock().unlock();
         return value;
+    }
+}
+
+class ForkJoinDemo extends RecursiveTask<Long> {
+    private Long start;
+    private Long end;
+    private Long temp = 100_00000L;
+
+    public ForkJoinDemo(Long start, Long end) {
+        this.start = start;
+        this.end = end;
+    }
+    @Override
+    protected Long compute() {
+        if ((end - start) < temp) {
+            Long sum = 0L;
+            for (Long i = start; i <= end; i++) {
+                sum += i;
+            }
+            return sum;
+        } else {
+            Long avg = (start + end) / 2;
+            ForkJoinDemo task1 = new ForkJoinDemo(start, avg);
+            task1.fork();
+            ForkJoinDemo task2 = new ForkJoinDemo(avg + 1, end);
+            task2.fork();
+            return task1.join() + task2.join();
+        }
     }
 }
