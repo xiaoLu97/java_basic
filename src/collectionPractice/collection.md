@@ -72,3 +72,17 @@ while (iterator2.hasNext()) {
 | public static void max(List list) | 返回集合中的最大值 |
 | public static boolean replaceAll(List list,Object oldV,Object newV) | 将集合中所有的 oldV 替换为 newV |
 | public static boolean addAll(List list,Object... o) | 向集合中添加元素 |
+
+# 泛型
+泛型是指在类定义时不指定类中信息的具体数据类型，而是用一个标识符来替代。
+
+当外部实例化对象的时候再来指定具体的数据类型。
+
+多态的思想
+
+# StringBuffer
+String 的底层是用数组来存值的，数组长度不可变
+
+StringBuffer 和 String 类似，底层也是一个数组，但是是一个可以扩容的动态数组
+
+StringBuffer 默认的数组长度为 16
