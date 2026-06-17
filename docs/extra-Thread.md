@@ -220,6 +220,479 @@ System.out.println("所有任务已处理完毕，程序准备退出。");
 | **`shutdownNow()`** | **暴力关闭**。正在干的尽量停，没干的直接扔。 | 发生异常或需要紧急取消任务时。 |
 | **`awaitTermination()`** | **阻塞等待**。配合 `shutdown()` 使用，用于确认关闭状态。 | 需要在主线程中同步等待所有子任务结束时。 |
 
-## Callable接口和Future接口方式
 
+# **ThreadPoolExecutor vs ThreadPoolTaskExecutor 核心区别**
+
+## **一、基本定位**
+
+**ThreadPoolExecutor**
+- JDK 原生线程池实现类（`java.util.concurrent.ThreadPoolExecutor`）
+- Java 并发包的基础组件
+- 所有线程池的底层实现
+
+**ThreadPoolTaskExecutor**
+- Spring Framework 提供的封装类（`org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor`）
+- 对 `ThreadPoolExecutor` 的包装和增强
+- 专为 Spring 生态设计
+
+---
+
+## **二、配置方式差异**
+
+**ThreadPoolExecutor**
+- 通过构造函数传入所有参数
+- 参数顺序固定，需要一次性传完 7 个参数
+- 配置完成后即可使用
+
+**ThreadPoolTaskExecutor**
+- 通过 Setter 方法逐个设置参数
+- 配置更灵活，可以分步设置
+- **必须调用 `initialize()` 方法**才能完成初始化
+
+---
+
+## **三、关键差异点**
+
+### **1. Spring 生态集成度**
+
+| 特性 | ThreadPoolExecutor | ThreadPoolTaskExecutor |
+|------|-------------------|----------------------|
+| **实现接口** | JDK 的 `Executor`、`ExecutorService` | Spring 的 `TaskExecutor`、`AsyncListenableTaskExecutor` |
+| **@Async 支持** | 需要额外配置适配器 | 天然支持，直接使用 |
+
+### **2. 功能扩展能力**
+
+**ThreadPoolTaskExecutor 的优势：**
+- 提供了更多可重写的方法（如 `execute`、`submit`、`submitListenable` 等）
+- 方便统一添加 MDC 上下文传递（日志追踪必备功能）
+- 可以方便地添加统一的监控日志
+- 提供 `getThreadPoolExecutor()` 方法获取底层的原生线程池进行细致监控
+- 方法级别的细粒度控制更容易实现
+
+**ThreadPoolExecutor 的扩展：**
+- 只能通过继承重写有限的方法
+- 需要手动实现 MDC 传递等高级功能
+- 监控逻辑需要自行设计和实现
+
+**真正的区别在于：**
+- `ThreadPoolTaskExecutor` 是 Spring 原生提供的类型，在 Spring 生态中使用更自然
+- 与 Spring 的其他功能（如 `@Async`）配合时，使用 `ThreadPoolTaskExecutor` 更直观
+- `ThreadPoolExecutor` 虽然也能注入，但在某些 Spring 特定场景下需要额外适配
+
+---
+
+## **四、适用场景建议**
+
+**使用 ThreadPoolTaskExecutor 的场景：**
+- Spring / Spring Boot 项目（强烈推荐）
+- 需要使用 `@Async` 异步注解
+- 需要统一的 MDC 日志追踪
+- 需要与 Spring 生命周期深度整合
+- 企业级应用，需要监控和管理
+
+---
+
+## **五、核心关系**
+
+**层级结构：**
+```
+ThreadPoolTaskExecutor（Spring 封装层）
+    ↓ 内部持有
+ThreadPoolExecutor（JDK 底层实现）
+    ↓ 管理
+Thread（实际工作线程）
+```
+
+
+**关键理解：**
+- `ThreadPoolTaskExecutor` 内部通过 `getThreadPoolExecutor()` 方法暴露底层的 `ThreadPoolExecutor`
+- 前者是后者的**包装器（Wrapper）**，增加了 Spring 生态的便利性
+- 学习时应先掌握 `ThreadPoolExecutor` 的原理，再理解 Spring 的封装价值
+
+---
+
+## **六、总结对比表**
+
+| 维度 | ThreadPoolExecutor | ThreadPoolTaskExecutor |
+|------|-------------------|----------------------|
+| **来源** | JDK `java.util.concurrent` | Spring Framework |
+| **配置方式** | 构造函数参数（7 个参数一次性传入） | Setter 方法 + 必须调用 initialize() |
+| **@Async 配合** | 需要适配 | 天然支持 |
+| **扩展方式** | 继承重写（方法有限） | 继承重写（提供更多钩子方法） |
+| **MDC 支持** | 需手动实现 | 便于统一封装 |
+| **监控能力** | 需自行设计实现 | 提供便捷方法和钩子 |
+
+---
+
+## **七、学习建议**
+
+1. **先精通** `ThreadPoolExecutor` 的 7 个参数含义、工作流程、拒绝策略
+2. **再理解** `ThreadPoolTaskExecutor` 如何简化 Spring 开发
+3. **实际工作**中，Spring Boot 项目优先使用 `ThreadPoolTaskExecutor`
+4. **面试准备**时，两个都要了解，重点掌握 `ThreadPoolExecutor` 的原理
+---
+
+# ThreadPoolTaskExecutor 中 execute 和 submit 的区别
+
+## 方法来源不同
+
+- **execute()**：定义在 `Executor` 接口中（最顶层接口）
+- **submit()**：定义在 `ExecutorService` 接口中（Executor 的子接口）
+
+## 参数类型不同
+
+| 方法 | 可接受的参数类型 |
+|------|----------------|
+| execute() | 只接受 `Runnable` |
+| submit() | 接受 `Runnable` 和 `Callable` |
+
+## 返回值不同
+
+| 方法 | 返回值 | 说明 |
+|------|--------|------|
+| execute() | `void`（无返回值） | 无法获取任务执行结果 |
+| submit() | `Future<?>` | 可以通过 Future 获取任务结果或异常 |
+
+## 异常处理不同
+
+| 方法 | 异常处理方式 |
+|------|-------------|
+| execute() | 任务中的异常会直接抛出，可能导致线程终止 |
+| submit() | 任务中的异常被封装在 Future 中，调用 get() 时才会抛出 ExecutionException |
+
+## 使用场景对比
+
+| 特性 | execute() | submit() |
+|------|-----------|----------|
+| 需要返回结果 |  不支持 | ✅ 支持 |
+| 需要捕获异常 | ❌ 不方便 | ✅ 通过 Future.get() 捕获 |
+| 性能开销 | 较小（无 Future 对象创建） | 稍大（需创建 Future 对象） |
+| 适用场景 | 不需要结果的简单任务 | 需要结果或异常处理的任务 |
+
+## 核心总结
+
+- **execute()**：适合"发了就不管"的任务，不关心结果和异常
+- **submit()**：适合需要获取结果、捕获异常或控制任务生命周期的场景
+
+---
+
+# FutureTask 如何获取结果，是否会阻塞主线程
+
+## 获取结果的方式
+
+通过调用 `FutureTask.get()` 方法获取结果：
+
+```java
+FutureTask<Integer> ft = new FutureTask<>(callable);
+Thread t = new Thread(ft);
+ft.start();
+
+Integer result = ft.get();  // 获取结果
+```
+
+
+## 是否会阻塞主线程？
+
+**答案：是的，会阻塞！**
+
+`ft.get()` 是一个**阻塞方法**，具体行为如下：
+
+### 阻塞的条件
+
+| 任务状态 | get() 的行为 |
+|---------|-------------|
+| 任务已完成 | 立即返回结果，不阻塞 |
+| 任务未完成 | 阻塞当前线程，直到任务完成 |
+
+### 阻塞的原理
+
+1. **主线程调用 get()** → 检查任务状态
+2. **如果任务未完成** → 调用 `LockSupport.park()` 让主线程进入 WAITING 状态（挂起，不占用 CPU）
+3. **工作线程完成任务** → 设置结果，调用 `LockSupport.unpark()` 唤醒主线程
+4. **主线程被唤醒** → 从 park() 返回，获取结果并继续执行
+
+### 阻塞的特点
+
+| 特性 | 说明 |
+|------|------|
+| 是否占用 CPU | 否（WAITING 状态不占用 CPU） |
+| 是否可以中断 | 是（调用 interrupt() 可抛出 InterruptedException） |
+| 是否可以超时 | 是（使用 `get(timeout, TimeUnit)` 设置超时时间） |
+| 阻塞哪个线程 | 调用 get() 的那个线程（通常是主线程） |
+
+### 避免长时间阻塞的方法
+
+#### 方法1：带超时的 get
+
+```java
+try {
+    Integer result = ft.get(5, TimeUnit.SECONDS);  // 最多等 5 秒
+} catch (TimeoutException e) {
+    System.out.println("任务超时");
+    ft.cancel(true);  // 取消任务
+}
+```
+
+
+#### 方法2：先做其他事，最后再 get
+
+```java
+// 提交多个任务
+FutureTask<Integer> ft1 = new FutureTask<>(task1);
+FutureTask<Integer> ft2 = new FutureTask<>(task2);
+new Thread(ft1).start();
+new Thread(ft2).start();
+
+// 先做其他事情
+doOtherWork();
+
+// 真正需要结果时才调用 get（此时可能任务已经完成，不会阻塞）
+Integer result1 = ft1.get();
+Integer result2 = ft2.get();
+```
+
+
+#### 方法3：检查任务是否完成
+
+```java
+if (ft.isDone()) {
+    // 任务已完成，get() 不会阻塞
+    Integer result = ft.get();
+} else {
+    // 任务未完成，可以选择等待或做其他事
+}
+```
+
+
+### 核心总结
+
+| 要点 | 说明 |
+|------|------|
+| **get() 是否阻塞** | 是，任务未完成时会阻塞调用线程 |
+| **阻塞的本质** | 通过 LockSupport.park() 让线程进入 WAITING 状态 |
+| **何时解除阻塞** | 任务完成时通过 LockSupport.unpark() 唤醒 |
+| **是否一直阻塞** | 否，可以使用超时或 isDone() 检查来避免 |
+| **最佳实践** | 提交任务后先做其他事，真正需要结果时再调用 get() |
+
+---
+
+我来为你解释这三个概念：
+
+---
+
+# CompletableFuture 是什么
+
+### 基本概念
+
+`CompletableFuture` 是 Java 8 引入的异步编程工具类，位于 `java.util.concurrent` 包中。它实现了 `Future` 和 `CompletionStage` 两个接口。
+
+### 核心特性
+
+| 特性 | 说明 |
+|------|------|
+| **异步非阻塞** | 任务异步执行，不阻塞主线程 |
+| **函数式编程** | 支持链式调用，类似 Stream API |
+| **结果回调** | 任务完成后自动触发回调，无需手动 get() |
+| **异常处理** | 提供完善的异常处理机制 |
+| **任务组合** | 可以轻松组合多个异步任务（串行、并行） |
+
+### 与传统 Future 的对比
+
+| 特性 | Future | CompletableFuture |
+|------|--------|-------------------|
+| 获取结果方式 | 必须调用 get()（阻塞） | 可以回调或 get()（非阻塞优先） |
+| 是否阻塞 | get() 会阻塞 | 默认非阻塞，通过回调处理结果 |
+| 任务编排 | 不支持 | 支持 thenApply、thenCompose、allOf 等 |
+| 异常处理 | 需要在 get() 时捕获 | 提供 exceptionally、handle 等方法 |
+| 手动完成 | 不支持 | 可以手动 complete() 设置结果 |
+
+### 基本使用模式
+
+```
+创建异步任务 → 链式处理结果 → 异常处理 → 最终消费
+```
+
+
+### 典型应用场景
+
+- 多个独立任务并行执行后合并结果
+- 任务之间有依赖关系，需要串行执行
+- 需要超时控制的任务
+- 需要优雅处理异常的场景
+
+---
+
+# ListenableFuture 是什么
+
+### 基本概念
+
+`ListenableFuture` 是 **Spring Framework** 提供的接口，位于 `org.springframework.util.concurrent` 包中。它扩展了标准的 `Future` 接口。
+
+### 核心特性
+
+| 特性 | 说明 |
+|------|------|
+| **添加监听器** | 可以注册回调函数，任务完成时自动触发 |
+| **非阻塞** | 不需要调用 get() 等待，通过回调获取结果 |
+| **Spring 生态** | Spring 框架中的异步任务返回类型 |
+| **兼容 Future** | 继承了 Future 的所有方法 |
+
+### 与标准 Future 的对比
+
+| 特性 | Future | ListenableFuture |
+|------|--------|------------------|
+| 获取结果 | 只能 get()（阻塞） | 可以 get() 或 addCallback()（非阻塞） |
+| 回调支持 | ❌ 不支持 | ✅ 支持 SuccessCallback 和 FailureCallback |
+| 所属框架 | JDK 标准库 | Spring Framework |
+| 使用场景 | 通用异步任务 | Spring 异步方法返回值 |
+
+### 核心方法
+
+- `addCallback(SuccessCallback, FailureCallback)`：添加成功和失败回调
+- `addCallback(ListenableFutureCallback)`：添加统一回调接口
+
+---
+
+# submitListenable 是什么
+
+### 基本概念
+
+`submitListenable()` 是 **Spring 的 ThreadPoolTaskExecutor** 提供的方法，用于提交任务并返回 `ListenableFuture`。
+
+### 方法签名
+
+```java
+ListenableFuture<?> submitListenable(Runnable task)
+ListenableFuture<T> submitListenable(Callable<T> task)
+```
+
+
+### 与普通 submit() 的对比
+
+| 特性 | submit() | submitListenable() |
+|------|----------|-------------------|
+| 返回类型 | `Future<?>` | `ListenableFuture<?>` |
+| 回调支持 | ❌ 不支持直接回调 | ✅ 支持 addCallback() |
+| 所属类 | ExecutorService | ThreadPoolTaskExecutor（Spring） |
+| 使用场景 | 标准 JDK 线程池 | Spring 管理的线程池 |
+
+### 使用流程
+
+```
+提交任务 → 返回 ListenableFuture → 添加回调 → 任务完成自动触发回调
+```
+
+
+---
+
+## 三者关系总结
+
+### 继承和实现关系
+
+```
+JDK 标准库：
+├── Future (接口)
+│   └── CompletableFuture (实现类，Java 8+)
+
+Spring Framework：
+├── Future (接口，继承自 JDK)
+│   └── ListenableFuture (接口，Spring 扩展)
+│       └── CompletableFuture (也实现了这个接口)
+```
+
+
+### 功能对比表
+
+| 特性 | Future | ListenableFuture | CompletableFuture |
+|------|--------|------------------|-------------------|
+| **来源** | JDK 1.5+ | Spring Framework | JDK 1.8+ |
+| **阻塞获取** | ✅ get() | ✅ get() | ✅ get()（但不推荐） |
+| **回调机制** |  不支持 | ✅ addCallback() | ✅ thenApply/thenAccept 等 |
+| **链式编排** | ❌ 不支持 | ❌ 不支持 | ✅ 强大的链式 API |
+| **异常处理** | 需在 get() 时捕获 | 通过 FailureCallback | exceptionally/handle |
+| **手动完成** | ❌ 不支持 |  不支持 | ✅ complete()/completeExceptionally() |
+| **任务组合** | ❌ 不支持 | ❌ 不支持 | ✅ allOf/anyOf/thenCombine 等 |
+| **推荐使用度** | ⭐（传统方式） | ⭐⭐⭐（Spring 项目） | ⭐⭐⭐⭐⭐（现代推荐） |
+
+### 演进关系
+
+```
+Future (JDK 1.5)
+    ↓ 缺点：只能阻塞获取，无回调
+    ↓
+ListenableFuture (Spring)
+    ↓ 改进：增加回调支持，但仍需手动管理
+    ↓
+CompletableFuture (JDK 1.8)
+    ↓ 最佳：回调 + 链式编排 + 异常处理 + 任务组合
+```
+
+
+---
+
+## 实际使用建议
+
+### 场景1：纯 JDK 项目，简单异步任务
+
+使用 `CompletableFuture`：
+
+```
+优势：无需额外依赖，功能强大，代码简洁
+```
+
+
+### 场景2：Spring 项目，需要与 Spring 集成
+
+使用 `submitListenable()` 返回 `ListenableFuture`：
+
+```
+优势：与 Spring 异步注解 @Async 配合良好，便于统一管理
+```
+
+
+### 场景3：复杂异步流程编排
+
+使用 `CompletableFuture`：
+
+```
+优势：链式调用清晰，异常处理好，支持并行和串行组合
+```
+
+
+### 核心选择原则
+
+| 项目类型 | 推荐方案 | 原因 |
+|---------|---------|------|
+| 新项目（JDK 8+） | CompletableFuture | 功能最全，标准化 |
+| Spring 老项目 | ListenableFuture | 与现有代码兼容 |
+| 简单异步任务 | CompletableFuture 或 ListenableFuture | 看项目依赖 |
+| 复杂异步编排 | CompletableFuture | 链式 API 更强大 |
+
+---
+
+# MDC(Mapped Diagnostic Context) 
+
+MDC 是 SLF4J 提供的一个工具类，用于在多线程环境下存储和传递诊断上下文信息。它本质上是一个线程级别的 Map，可以存储键值对数据（如 traceId、userId 等），这些数据显示在日志中，方便追踪和调试。
+
+**作用：** 日志中输出额外信息
+
+MDC 是基于 ThreadLocal 实现的，子线程不会自动继承父线程的 MDC 数据！
+
+**线程池场景：**
+- 线程池中的线程会被复用
+- 如果不清理 MDC，上一个任务的上下文可能污染下一个任务
+- 所以 ThreadMdcUtil 在 finally 块中调用了 MDC.clear()
+
+使用 MDC + ThreadMdcUtil 的原因就是：线程池执行任务时是不同的线程，它们需要拿到主线程的上下文信息（如 traceId、userId），这样才能保证日志的完整性和可追踪性。
+
+```java
+@Override
+public void execute(Runnable task) {
+// 1. 获取主线程的 MDC 上下文
+Map<String, String> contextMap = MDC.getCopyOfContextMap();
+
+    // 2. 包装任务，把上下文传递给子线程
+    super.execute(ThreadMdcUtil.wrap(task, contextMap));
+}
+```
 
